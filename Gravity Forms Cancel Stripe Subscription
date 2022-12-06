@@ -1,0 +1,40 @@
+/* ************************************************************************************************* **
+** ******             Auto Cancel Stripe Subscription after set number of payments          ******** **
+** ******     See https://docs.gravityforms.com/cancel-stripe-subscription-payments/        ******** **
+** ************************************************************************************************* */
+
+add_action( 'gform_post_add_subscription_payment', function ( $entry ) {
+    gf_stripe()->log_debug( 'gform_post_add_subscription_payment: Running...' );
+ 
+    if ( rgar( $entry, 'payment_status' ) !== 'Active' ) {
+        // Abort if this event isn't for an active subscription.
+        return;
+    }
+ 
+    // Get the feed that processed the entry.
+    $feed      = gf_stripe()->get_payment_feed( $entry );
+    $feed_name = rgars( $feed, 'meta/feedName' );
+ 
+    gf_stripe()->log_debug( 'gform_post_add_subscription_payment: Feed: ' . $feed_name . '; Entry: ' . $entry['id'] );
+ 
+    // Define the names of the feeds you want this code to cancel subscriptions for.
+    $feed_names = array( '202302_four_payments','202302_three_payments' );
+ 
+    if ( ! in_array( $feed_name, $feed_names ) ) {
+        // Abort if the entry was processed by a different feed.
+        return;
+    }
+ 
+    // Get the payment count from the database.
+    global $wpdb;
+    $count = $wpdb->get_var( $wpdb->prepare( "SELECT count(id) FROM {$wpdb->prefix}gf_addon_payment_transaction WHERE lead_id=%d", $entry['id'] ) );
+    gf_stripe()->log_debug( 'gform_post_add_subscription_payment: $count = ' . print_r( $count, true ) );
+ 
+    if ( $feed_name = '202302_four_payments' && $count >= 4 ) { // Update this line to the Total number of payments including the first one.
+        $result = gf_stripe()->cancel( $entry, $feed );
+        gf_stripe()->log_debug( "gform_post_add_subscription_payment: Cancelling subscription (feed #{$feed['id']} - {$feed_name}) for entry #{$entry['id']}. Result: " . print_r( $result, 1 ) );
+    } elseif ( $feed_name = '202302_three_payments' && $count >= 3 ) {
+        $result = gf_stripe()->cancel( $entry, $feed );
+        gf_stripe()->log_debug( "gform_post_add_subscription_payment: Cancelling subscription (feed #{$feed['id']} - {$feed_name}) for entry #{$entry['id']}. Result: " . print_r( $result, 1 ) );
+    }
+} );
